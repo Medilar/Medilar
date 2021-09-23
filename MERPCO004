@@ -1,0 +1,206 @@
+#include 'protheus.ch'
+#include 'parmtype.ch'
+#include 'TopConn.ch'
+
+/*/{Protheus.doc}
+
+@author Luiz Neto
+@since 27/08/2021
+@Relatório diário - Geração de Lançamentos do PCO. 
+@version undefined
+@param nlOpc, numeric, Opcao a ser executada
+@param uParam, undefined, Parametros da rotina a ser executada
+@type function
+/*/
+
+user function MERPCO004()
+
+Private cLan1 := Space(8)
+Private cLan2 := Space(8)
+Private cLan3 := Space(2)
+Private cLan4 := Space(2)
+Private cLan5 := Space(21)
+Private cLan6 := Space(21)
+
+
+getParam()
+
+FWMsgRun(, {|oSay| Processa() }, "Buscando Informações de lançamentos", "Gerando Excel" )
+
+Return
+
+Static Function Processa()
+
+Local cQuery	:= ""
+Local cAlias	:= GetNextAlias()
+Local aDados	:= {}
+
+Sleep(5000)
+
+cQuery	:= "SELECT AKD_LOTE, AKD_TIPO, AKD_DATA, AKD_TPSALD, AKD_PROCES, AKD_ITEM, AKD_CO, AK5_DESCRI, AKD_CC, CTT_DESC01, AKD_VALOR1, AKD_HIST, AKD_CODPLA				"+CRLF
+cQuery	+= "FROM " + RetSQLName("AKD") + " AKD									                                                                       			"+CRLF
+cQuery  += "LEFT JOIN " + RetSqlName("CTT") + " CTT ON CTT_CUSTO = AKD_CC AND CTT.D_E_L_E_T_=''                                                         		"+CRLF
+cQuery +=  "LEFT JOIN " + RetSqlName("AK5") + " AK5 ON AK5_CODIGO = AKD_CO AND AK5.D_E_L_E_T_=''                                                       			"+CRLF
+cQuery	+= "WHERE AKD.D_E_L_E_T_ = ' '											    																			"+CRLF
+cQuery	+= "AND AKD_DATA >= '" + DTOS(cLan1) + "' AND  AKD_DATA <= '" + DTOS(cLan2) + "'																		"+CRLF
+cQuery  += "AND AKD_TPSALD BETWEEN '"+cLan3 + "' AND'" + cLan4+ "'       																						"+CRLF
+cQuery  += "AND AKD_CC BETWEEN '"+cLan5 + "' AND'" + cLan6+ "'       																							"+CRLF
+cQuery  += "AND AKD_STATUS IN ('1')																															"+CRLF
+cQuery	+= "ORDER BY AKD_LOTE, AKD_DATA, AKD_CC, AKD_CO																											"+CRLF
+
+
+
+TCQUERY cQuery NEW ALIAS (cAlias)
+
+(cAlias)->(DbGoTop())
+
+Do While !(cAlias)->(Eof())
+					
+	aAdd(aDados,{(cAlias)->AKD_LOTE,;
+	(cAlias)->AKD_TIPO,;
+	(cAlias)->AKD_DATA,;
+    (cAlias)->AKD_TPSALD,;
+    (cAlias)->AKD_PROCES,;
+    (cAlias)->AKD_ITEM,;
+    (cAlias)->AKD_CO,;
+    (cAlias)->AK5_DESCRI,;
+    (cAlias)->AKD_CC,;
+    (cAlias)->CTT_DESC01,;
+    (cAlias)->AKD_VALOR1,;
+    (cAlias)->AKD_HIST,;
+    (cAlias)->AKD_CODPLA,;
+	.F.})    
+
+	(cAlias)->(DbSkip())
+
+EndDo
+
+(cAlias)->(DbCloseArea())
+
+geraexcel(aDados)
+
+return
+
+Static Function geraexcel(aDados)
+
+	Local oExcel 	:= FWMSExcel():New()
+	Local oExcelApp	:= Nil
+	Local cAba		:= "Relação de Lançamentos PCO "
+	Local cTabela	:= "Lançamentos PCO"
+	Local cArquivo	:= "Lançamentos PCO" + dToS( msDate() ) + "_" + strtran(time(), ":", "") + ".XLS"
+	Local cPath		:= "C:\TEMP\"
+	Local cDefPath	:= GetSrvProfString( "StartPath", "\system\" )
+	Local i
+	
+	If len(aDados) >0
+	
+		If !ApOleClient("MSExcel")
+		    MsgAlert("Microsoft Excel não instalado!")
+		    Return
+		EndIf
+
+		oExcel:AddWorkSheet(cAba)
+		oExcel:AddTable(cAba, cTabela)
+		
+		oExcel:AddColumn(cAba, cTabela, "LOTE"						, 1, 1, .F.)
+		oExcel:AddColumn(cAba, cTabela, "TIPO"						, 1, 1, .F.)
+		oExcel:AddColumn(cAba, cTabela, "DATA"						, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "TIPO DO SALDO"				, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "PROCESSO"					, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "ITEM"						, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "C.O"						, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "DESC C.O"					, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "C.C."						, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "DESC C.C."					, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "VALOR"						, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "HISTÓRICO"					, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "COD PLANILHA"				, 1, 1, .F.)
+
+		For i := 1 to len(aDados)
+
+			oExcel:AddRow(cAba,;
+			 			  cTabela,;
+					  		 {aDados[i][1]   	,;
+							 aDados[i][2]		,;
+					  		sTOD(aDados[i][3])	,;
+							  aDados[i][4]   	,;
+					  		  aDados[i][5]  	,;
+					  		  aDados[i][6]   	,;
+					  		  aDados[i][7]   	,;
+                              aDados[i][8] 		,;
+                              aDados[i][9]      ,;
+							  aDados[i][10]      ,;
+							  aDados[i][11]     ,;
+                              aDados[i][12]     ,;
+                              aDados[i][13]     })
+
+		Next i
+
+		If !Empty(oExcel:aWorkSheet)
+		
+		    oExcel:Activate()
+		    oExcel:GetXMLFile(cArquivo)
+		 
+		    CpyS2T(cDefPath+cArquivo, cPath)
+		
+		    oExcelApp := MsExcel():New()
+		    oExcelApp:WorkBooks:Open(cPath+cArquivo) // Abre a planilha
+		    oExcelApp:SetVisible(.T.)
+		
+		EndIf 
+	Else
+		Alert("Não existem dados para emitir o relatório.")
+	EndIf
+
+Return
+
+/*/{Protheus.doc} getParam
+Funcao para controlar os parametros do Processamento
+@author Luiz Neto
+@since 27/08/2021
+@version 1.0
+
+@type function
+/*/
+Static Function getParam()
+
+Local alParamBox	:= {}
+Local clTitulo		:= "Parâmetros"
+Local alButtons		:= {}
+Local llCentered	:= .T.
+Local nlPosx		:= Nil
+Local nlPosy		:= Nil
+Local clLoad		:= ""
+Local llCanSave		:= .T.
+Local llUserSave	:= .T.
+Local llRet			:= .T.
+Local blOk
+Local alParams		:= {}
+AADD(alParamBox,{1,"Data de"				,Ctod(space(8))			,"@!",".T."     ,""   	,"",50,.F.})
+AADD(alParamBox,{1,"Data ate"				,Ctod(space(8))			,"@!",".T."     ,""   	,"",50,.F.})
+AADD(alParamBox,{1,"Tipo de Saldo de"		,space(2)				,"@!",".T."     ,""   	,"",25,.F.})
+AADD(alParamBox,{1,"Tipo de Saldo ate"		,space(2)				,"@!",".T."     ,""   	,"",25,.F.})
+AADD(alParamBox,{1,"Centro de Custo de"		,space(21)				,"@!",".T."     ,"CTT"   ,"",50,.F.})
+AADD(alParamBox,{1,"Centro de custo ate"	,space(6)				,"@!",".T."     ,"CTT"   ,"",50,.F.})
+
+
+
+
+
+llRet := ParamBox(alParamBox, clTitulo, alParams, blOk, alButtons, llCentered, nlPosx, nlPosy,, clLoad, llCanSave, llUserSave)
+
+if ( llRet )
+	cLan1    	:= alParams[1]
+	cLan2   	:= alParams[2]
+	cLan3		:= alParams[3]
+	cLan4 		:= alParams[4]
+	cLan5 		:= alParams[5]
+	cLan6		:= alParams [6]
+else
+	Msginfo("Operacao Cancelada")
+	RETURN .F.
+Endif
+
+Return
+
+
