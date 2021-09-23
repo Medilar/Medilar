@@ -1,0 +1,17 @@
+/*
+
+Autor: Luiz Neto
+Função para retornar a versão da planilha orçamentária de acordo com sua revisão vigente.
+
+*/
+
+User Function RETVER()
+
+Local cVersao := ""
+
+    DbSelectArea("AK1")
+    AK1->(DbSetOrder(1))
+    cVersao := POSICIONE('AK1',1,XFILIAL('AK1') + YEAR2STR(DDATABASE)+IF(MONTH2STR(DDATABASE)<='06','A','B'),'AK1_VERSAO')
+
+
+return cVersao
