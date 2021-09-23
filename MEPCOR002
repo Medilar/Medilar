@@ -1,0 +1,194 @@
+#include 'protheus.ch'
+#include 'parmtype.ch'
+#include 'TopConn.ch'
+
+/*/{Protheus.doc}
+
+@author Luiz Neto
+@since 17/08/2021
+@Relatório diário - Geração de Pedidos de Compras com visão orçamentária
+@version undefined
+@param nlOpc, numeric, Opcao a ser executada
+@param uParam, undefined, Parametros da rotina a ser executada
+@type function
+/*/
+
+user function MEPCOR02()
+
+Private cPedido1 := Space(8)
+Private cPedido2 := Space(8)
+
+
+getParam()
+
+FWMsgRun(, {|oSay| Processa() }, "Buscando Informações de Pedido de Compras", "Gerando Excel" )
+
+Return
+
+Static Function Processa()
+
+Local cQuery	:= ""
+Local cAlias	:= GetNextAlias()
+Local aDados	:= {}
+
+Sleep(5000)
+
+cQuery	:= "SELECT C7_FILIAL,M0_FILIAL,C7_EMISSAO, C7_NUM, C7_FORNECE, A2_NOME,C7_PRODUTO, B1_DESC, C7_TOTAL,C7_CC, CTT_DESC01,C7_ZZCO, AK5_DESCRI, USR_NOME	"+ CRLF
+cQuery	+= "FROM " + RetSQLName("SC7") + " SC7									                                                                       			"+ CRLF
+cQuery  += "LEFT JOIN " + RetSqlName("SA2") + " SA2 ON A2_COD = C7_FORNECE AND SA2.D_E_L_E_T_=''                                                       			"+ CRLF
+cQuery  += "INNER JOIN SYS_COMPANY SYS ON M0_CODFIL = C7_FILIAL  AND SYS.D_E_L_E_T_ = ''                                                     		   			"+ CRLF
+cQuery  += "LEFT JOIN " + RetSqlName("SB1") + " SB1 ON B1_COD = C7_PRODUTO AND SB1.D_E_L_E_T_=''                                                       			"+ CRLF
+cQuery  += "LEFT JOIN " + RetSqlName("CTT") + " CTT ON CTT_CUSTO = C7_CC AND CTT.D_E_L_E_T_=''                                                         			"+ CRLF
+cQuery +=  "LEFT JOIN " + RetSqlName("AK5") + " AK5 ON AK5_CODIGO = C7_ZZCO AND AK5.D_E_L_E_T_=''                                                       		"+CRLF
+cQuery  += "LEFT JOIN SYS_USR USR ON USR_ID = C7_USER AND USR.D_E_L_E_T_=''                                                     		   					"+ CRLF
+cQuery	+= "WHERE SC7.D_E_L_E_T_ = ' '											    																			"+CRLF
+cQuery	+= "AND C7_EMISSAO >= '" + DTOS(cPedido1) + "' AND  C7_EMISSAO <= '" + DTOS(cPedido2) + "'																"+ CRLF
+cQuery	+= "ORDER BY C7_FILIAL, C7_NUM, C7_EMISSAO																												"+ CRLF
+
+
+TCQUERY cQuery NEW ALIAS (cAlias)
+
+(cAlias)->(DbGoTop())
+
+Do While !(cAlias)->(Eof())
+					
+	aAdd(aDados,{(cAlias)->C7_FILIAL,;
+	(cAlias)->M0_FILIAL,;
+    (cAlias)->C7_EMISSAO,;
+    (cAlias)->C7_NUM,;
+    (cAlias)->C7_FORNECE,;
+    (cAlias)->A2_NOME,;
+    (cAlias)->C7_PRODUTO,;
+    (cAlias)->B1_DESC,;
+    (cAlias)->C7_TOTAL,;
+    (cAlias)->C7_CC,;
+    (cAlias)->CTT_DESC01,;
+    (cAlias)->C7_ZZCO,;
+    (cAlias)->AK5_DESCRI,;
+	(cAlias)->USR_NOME,;
+	.F.})    
+
+	(cAlias)->(DbSkip())
+
+EndDo
+
+(cAlias)->(DbCloseArea())
+
+geraexcel(aDados)
+
+return
+
+Static Function geraexcel(aDados)
+
+	Local oExcel 	:= FWMSExcel():New()
+	Local oExcelApp	:= Nil
+	Local cAba		:= "relacao diário de Pedidos de Compras"
+	Local cTabela	:= "Pedidos de Compras"
+	Local cArquivo	:= "Pedidos de Compras" + dToS( msDate() ) + "_" + strtran(time(), ":", "") + ".XLS"
+	Local cPath		:= "C:\TEMP\"
+	Local cDefPath	:= GetSrvProfString( "StartPath", "\system\" )
+	Local i
+	
+	If len(aDados) >0
+	
+		If !ApOleClient("MSExcel")
+		    MsgAlert("Microsoft Excel não instalado!")
+		    Return
+		EndIf
+
+		oExcel:AddWorkSheet(cAba)
+		oExcel:AddTable(cAba, cTabela)
+		
+		oExcel:AddColumn(cAba, cTabela, "CODIGO FILIAL"				, 1, 1, .F.)
+		oExcel:AddColumn(cAba, cTabela, "NOME FILIAL"				, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "EMISSAO"					, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "NUM PEDIDO"				, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "COD FORNECE"				, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "RAZÃO SOCIAL"				, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "COD PROD"					, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "DESC PROD"					, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "TOTAL"						, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "C.C."						, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "DESC C.C."					, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "C.O."						, 1, 1, .F.)
+        oExcel:AddColumn(cAba, cTabela, "DESC C.O."					, 1, 1, .F.)
+		oExcel:AddColumn(cAba, cTabela, "COMPRADOR"					, 1, 1, .F.)
+
+		For i := 1 to len(aDados)
+
+			oExcel:AddRow(cAba,;
+			 			cTabela,;
+					  		 {aDados[i][1]   	,;
+					  		 aDados[i][2]	  	,;
+							STOD(aDados[i][3])   	,;
+					  		  aDados[i][4]  	,;
+					  		  aDados[i][5]   	,;
+					  		  aDados[i][6]   	,;
+                              aDados[i][7] ,;
+                              aDados[i][8]      ,;
+							  aDados[i][9]      ,;
+							  aDados[i][10]      ,;
+                              aDados[i][11]      ,;
+                              aDados[i][12]      ,;
+							  aDados[i][13]      ,;
+					  		  aDados[i][14]    	 })
+
+		Next i
+
+		If !Empty(oExcel:aWorkSheet)
+		
+		    oExcel:Activate()
+		    oExcel:GetXMLFile(cArquivo)
+		 
+		    CpyS2T(cDefPath+cArquivo, cPath)
+		
+		    oExcelApp := MsExcel():New()
+		    oExcelApp:WorkBooks:Open(cPath+cArquivo) // Abre a planilha
+		    oExcelApp:SetVisible(.T.)
+		
+		EndIf 
+	Else
+		Alert("Não existem dados para emitir o relatório.")
+	EndIf
+
+Return
+
+/*/{Protheus.doc} getParam
+Funcao para controlar os parametros do Processamento
+@author Luiz Neto
+@since 16/08/2021
+@version 1.0
+
+@type function
+/*/
+Static Function getParam()
+
+Local alParamBox	:= {}
+Local clTitulo		:= "Parâmetros"
+Local alButtons		:= {}
+Local llCentered	:= .T.
+Local nlPosx		:= Nil
+Local nlPosy		:= Nil
+Local clLoad		:= ""
+Local llCanSave		:= .T.
+Local llUserSave	:= .T.
+Local llRet			:= .T.
+Local blOk
+Local alParams		:= {}
+AADD(alParamBox,{1,"Emissao de"		,Ctod(space(8))			,"@!",".T."     ,""   ,"",50,.F.})
+AADD(alParamBox,{1,"Emissao ate"	,Ctod(space(8))			,"@!",".T."     ,""   ,"",50,.F.})
+
+
+llRet := ParamBox(alParamBox, clTitulo, alParams, blOk, alButtons, llCentered, nlPosx, nlPosy,, clLoad, llCanSave, llUserSave)
+
+if ( llRet )
+	cPedido1    	:= alParams[1]
+	cPedido2   	    := alParams[2]
+else
+	Msginfo("Operacao Cancelada")
+	RETURN .F.
+Endif
+
+Return
+
+// teste
